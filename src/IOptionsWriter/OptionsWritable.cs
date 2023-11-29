@@ -1,70 +1,72 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Dynamic;
 using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
-using JStreamAsyncNet;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
-namespace IOptionsWriter
+namespace IOptionsWriter;
+
+public class OptionsWritable<T> : IOptionsWritable<T> where T : class, new()
 {
-    public class OptionsWritable<T> : IOptionsWritable<T> where T : class, new()
+    private readonly IConfigurationRoot _configurationRoot;
+    private readonly IHostEnvironment _environment;
+    private readonly bool _forceReloadAfterWrite;
+    private readonly IOptionsMonitor<T> _options;
+    private readonly string _section;
+    private readonly string _settingsFile;
+
+    public OptionsWritable(IHostEnvironment environment,
+        IOptionsMonitor<T> options,
+        IConfigurationRoot configurationRoot,
+        string section,
+        string settingsFile,
+        bool forceReloadAfterWrite = false)
     {
-        private readonly ConfigurationRoot _configurationRoot;
-        private readonly IHostingEnvironment _environment;
-        private readonly bool _forceReloadAfterWrite;
-        private readonly IOptionsMonitor<T> _options;
-        private readonly string _section;
-        private readonly string _settingsFile;
-
-        public OptionsWritable(IHostingEnvironment environment,
-            IOptionsMonitor<T> options,
-            ConfigurationRoot configurationRoot,
-            string section,
-            string settingsFile,
-            bool forceReloadAfterWrite = false)
-        {
-            _environment = environment;
-            _options = options;
-            _configurationRoot = configurationRoot;
-            _section = section;
-            _settingsFile = settingsFile;
-            _forceReloadAfterWrite = forceReloadAfterWrite;
-        }
-
-        public T Get(string name)
-        {
-            return _options.Get(name);
-        }
-
-        public async Task Update(Action<T> applyChanges)
-        {
-            var fullPath = Path.IsPathRooted(_settingsFile)
-                ? _settingsFile
-                : _environment.ContentRootFileProvider.GetFileInfo(_settingsFile).PhysicalPath;
-
-            ExpandoObject config;
-            applyChanges(Value);
-
-            if (!File.Exists(fullPath))
-            {
-                config = new ExpandoObject();
-                ((IDictionary<string, object>) config).Add(_section, Value);
-            }
-            else
-            {
-                config = await File.OpenRead(fullPath).ToObjectAsync<ExpandoObject>();
-                ((IDictionary<string, object>) config)[_section] = Value;
-            }
-
-            await File.Create(fullPath).WriteFromObjectAsync(config, new JsonSerializerOptions {WriteIndented = true});
-
-            if (_forceReloadAfterWrite) _configurationRoot.Reload();
-        }
-
-        public T Value => _options.CurrentValue;
+        this._environment = environment;
+        this._options = options;
+        this._configurationRoot = configurationRoot;
+        this._section = section;
+        this._settingsFile = settingsFile;
+        this._forceReloadAfterWrite = forceReloadAfterWrite;
     }
+
+    public T Get(string name)
+    {
+        return this._options.Get(name);
+    }
+
+    public async Task Update(Action<T> applyChanges)
+    {
+        var fullPath = Path.IsPathRooted(this._settingsFile)
+            ? this._settingsFile
+            : this._environment.ContentRootFileProvider.GetFileInfo(this._settingsFile).PhysicalPath ?? this._settingsFile;
+
+        applyChanges(this.Value);
+
+        if (!File.Exists(fullPath))
+        {
+            var newJson = JsonSerializer.Serialize(this.Value);
+            await File.WriteAllTextAsync(fullPath, newJson);
+        }
+        else
+        {
+            var values = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                await File.ReadAllTextAsync(fullPath), 
+                new JsonSerializerOptions()
+                {
+                    ReadCommentHandling = JsonCommentHandling.Skip
+                });
+            values[this._section] = this.Value;
+            var updatedConfigJson =
+                JsonSerializer.Serialize(values, new JsonSerializerOptions { WriteIndented = true });
+            await File.WriteAllTextAsync(fullPath, updatedConfigJson);
+        }
+
+        if (this._forceReloadAfterWrite) this._configurationRoot.Reload();
+    }
+
+    public T Value => this._options.CurrentValue;
 }

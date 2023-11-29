@@ -1,7 +1,6 @@
-namespace IOptionsWriter.IntegrationTests
+﻿namespace IOptionsWriter.IntegrationTests;
+
+public class TestOptions
 {
-    public class TestOptions
-    {
-        public string TestOption { get; set; } = "defaultOptions";
-    }
+    public string TestOption { get; set; } = "defaultOptions";
 }
