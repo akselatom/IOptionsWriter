@@ -10,7 +10,7 @@ public static class ServiceCollectionExtensions
     /// <param name="forceReloadAfterWrite">If you have some problem with config file reloading</param>
     public static IServiceCollection ConfigureWritable<TOptions>(this IServiceCollection services,
         string sectionName = null, string settingsFile = "appsettings.json", bool forceReloadAfterWrite = false)
-        where TOptions : class, new()
+        where TOptions : class
     {
         sectionName??=typeof(TOptions).Name;
 
@@ -26,7 +26,7 @@ public static class ServiceCollectionExtensions
             return new NamedConfigureFromConfigurationOptions<TOptions>(sectionName, configurationSection,
                 _ => { });
         });
-        services.AddScoped<IOptionsWritable<TOptions>>(provider =>
+        services.AddSingleton<IOptionsWritable<TOptions>>(provider =>
         {
             var environment = provider.GetRequiredService<IHostEnvironment>();
             var options = provider.GetRequiredService<IOptionsMonitor<TOptions>>();

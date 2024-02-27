@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
@@ -9,7 +10,7 @@ using Microsoft.Extensions.Options;
 
 namespace IOptionsWriter;
 
-public class OptionsWritable<T> : IOptionsWritable<T> where T : class, new()
+public class OptionsWritable<T> : IOptionsWritable<T> where T : class
 {
     private readonly IConfigurationRoot _configurationRoot;
     private readonly IHostEnvironment _environment;
@@ -38,23 +39,24 @@ public class OptionsWritable<T> : IOptionsWritable<T> where T : class, new()
         return this._options.Get(name);
     }
 
-    public async Task Update(Action<T> applyChanges)
+    public async Task Update(Action<T> applyChanges, CancellationToken token = default)
     {
         var fullPath = Path.IsPathRooted(this._settingsFile)
             ? this._settingsFile
-            : this._environment.ContentRootFileProvider.GetFileInfo(this._settingsFile).PhysicalPath ?? this._settingsFile;
+            : this._environment.ContentRootFileProvider.GetFileInfo(this._settingsFile).PhysicalPath ??
+              this._settingsFile;
 
         applyChanges(this.Value);
 
         if (!File.Exists(fullPath))
         {
             var newJson = JsonSerializer.Serialize(this.Value);
-            await File.WriteAllTextAsync(fullPath, newJson);
+            await File.WriteAllTextAsync(fullPath, newJson, token);
         }
         else
         {
             var values = JsonSerializer.Deserialize<Dictionary<string, object>>(
-                await File.ReadAllTextAsync(fullPath), 
+                await File.ReadAllTextAsync(fullPath, token),
                 new JsonSerializerOptions()
                 {
                     ReadCommentHandling = JsonCommentHandling.Skip
@@ -62,10 +64,11 @@ public class OptionsWritable<T> : IOptionsWritable<T> where T : class, new()
             values[this._section] = this.Value;
             var updatedConfigJson =
                 JsonSerializer.Serialize(values, new JsonSerializerOptions { WriteIndented = true });
-            await File.WriteAllTextAsync(fullPath, updatedConfigJson);
+            await File.WriteAllTextAsync(fullPath, updatedConfigJson, token);
         }
 
         if (this._forceReloadAfterWrite) this._configurationRoot.Reload();
+
     }
 
     public T Value => this._options.CurrentValue;

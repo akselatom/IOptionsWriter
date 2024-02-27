@@ -1,4 +1,4 @@
-using System.Text.Json;
+using System.Text.Json; 
 
 namespace IOptionsWriter.IntegrationTests
 {
@@ -6,27 +6,24 @@ namespace IOptionsWriter.IntegrationTests
     public class OptionsWritableTests
     {
         private const string AppSettingsFile = "appsettings.json";
-
         private IHost TestHost = null!;
 
         [SetUp]
         public void Setup()
         {
-            File.Delete("appsettings.json");
-
+            File.Delete(AppSettingsFile);
             //create test host
             this.TestHost = Host.CreateDefaultBuilder()
                 .ConfigureServices(services =>
                 {
                     services.AddOptions().ConfigureWritable<TestOptions>();
-                })
-                .Build();
+                }).Build();
         }
 
         [TearDown]
         public void TearDown()
         {
-            File.Delete("appsettings.json");
+            File.Delete(AppSettingsFile);
         }
 
         [Test]
@@ -43,7 +40,7 @@ namespace IOptionsWriter.IntegrationTests
             
             //update options
             var optionsWritable = this.TestHost.Services.GetRequiredService<IOptionsWritable<TestOptions>>();
-            await optionsWritable.Update(options => options.TestOption = "some update event value");
+            await optionsWritable.Update(options => options.TestOption = "some update event value",CancellationToken.None);
             
             //reread test section from file 
             var newJson = await File.ReadAllTextAsync(AppSettingsFile);
@@ -62,7 +59,7 @@ namespace IOptionsWriter.IntegrationTests
             var expectedTestOptionValue = "changedValue";
 
             var optionsWritable = this.TestHost.Services.GetRequiredService<IOptionsWritable<TestOptions>>();
-            await optionsWritable.Update(options => options.TestOption = expectedTestOptionValue);
+            await optionsWritable.Update(options => options.TestOption = expectedTestOptionValue, CancellationToken.None);
             var anotherOptionsWritable = this.TestHost.Services.GetRequiredService<IOptionsWritable<TestOptions>>();
             Assert.That(anotherOptionsWritable.Value.TestOption, Is.EqualTo(expectedTestOptionValue));
         }
@@ -82,7 +79,7 @@ namespace IOptionsWriter.IntegrationTests
             const string expectedTestOptionValue = "changedValue";
 
             var optionsWritable = this.TestHost.Services.GetRequiredService<IOptionsWritable<TestOptions>>();
-            await optionsWritable.Update(options => options.TestOption = expectedTestOptionValue);
+            await optionsWritable.Update(options => options.TestOption = expectedTestOptionValue, CancellationToken.None);
             var parsedObject = JsonSerializer.Deserialize<TestOptions>(await File.ReadAllTextAsync(AppSettingsFile));
 
             Assert.That(parsedObject, Is.Not.Null);
